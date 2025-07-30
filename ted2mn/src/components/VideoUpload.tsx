@@ -29,7 +29,7 @@ const VideoUpload = ({ onUploadStart, onUploadProgress }: VideoUploadProps) => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [processing, setProcessing] = useState(false);
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     setSelectedFile(file || null);
 
@@ -40,56 +40,75 @@ const VideoUpload = ({ onUploadStart, onUploadProgress }: VideoUploadProps) => {
         type: file.type,
         lastModified: new Date(file.lastModified).toLocaleString(),
       });
-      console.log("source_lang", originalLanguage);
-      console.log("target_lang", targetLanguage);
-    }
-
-    if (file && originalLanguage && targetLanguage) {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("source_lang", originalLanguage); // Assuming these are language codes
-      formData.append("target_lang", targetLanguage);
-
-      onUploadStart(file);
-      setUploading(true);
-      setProcessing(false);
-      setUploadProgress(0);
-
-      try {
-        const response = await axios.post("http://127.0.0.1:8002/analyze", formData, {
-          onUploadProgress: (progressEvent) => {
-            if (progressEvent.total) {
-              const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-              setUploadProgress(percent);
-              onUploadProgress?.(percent);
-              console.log("Upload progress:", percent);
-            }
-          },
-        });
-
-        setProcessing(true);
-        console.log("Server response:", response.data);
-        alert("Upload complete. Starting translation...");
-      } catch (error) {
-        console.error("Upload failed:", error);
-        alert("Upload or analysis failed. Please try again.");
-      } finally {
-        setUploading(false);
-        setProcessing(false);
-        if (fileInputRef.current) {
-          fileInputRef.current.value = "";
-        }
-      }
-    } else {
-      alert("Please select file and both languages before uploading.");
     }
   };
 
-  const handleUploadClick = () => {
+  const handleUpload = async () => {
+    if (!selectedFile) {
+      alert("Please select a file first.");
+      return;
+    }
+
     if (!originalLanguage || !targetLanguage) {
       alert("Please select both original and target languages.");
       return;
     }
+
+    const formData = new FormData();
+    formData.append("file", selectedFile);
+    formData.append("source_lang", originalLanguage);
+    formData.append("target_lang", targetLanguage);
+
+    console.log("FormData contents:");
+    for (const [key, value] of formData.entries()) {
+      console.log(key, value);
+    }
+
+    onUploadStart(selectedFile);
+    setUploading(true);
+    setProcessing(false);
+    setUploadProgress(0);
+
+    try {
+      const response = await axios.post("http://127.0.0.1:8002/analyze", formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+        onUploadProgress: (progressEvent) => {
+          if (progressEvent.total) {
+            const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+            setUploadProgress(percent);
+            onUploadProgress?.(percent);
+            console.log("Upload progress:", percent);
+          }
+        },
+      });
+
+      setProcessing(true);
+      console.log("Server response:", response.data);
+      alert("Upload complete! Starting translation...");
+      
+    } catch (error) {
+      console.error("Upload failed:", error);
+      if (axios.isAxiosError(error)) {
+        console.error("Response data:", error.response?.data);
+        console.error("Response status:", error.response?.status);
+        console.error("Response headers:", error.response?.headers);
+        alert(`Upload failed: ${error.response?.data?.detail || error.message}`);
+      } else {
+        alert("Upload failed. Please try again.");
+      }
+    } finally {
+      setUploading(false);
+      setProcessing(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+      setSelectedFile(null);
+    }
+  };
+
+  const handleFileInputClick = () => {
     fileInputRef.current?.click();
   };
 
@@ -107,47 +126,30 @@ const VideoUpload = ({ onUploadStart, onUploadProgress }: VideoUploadProps) => {
 
       <Card className="border-border shadow-lg">
         <CardContent className="p-8 space-y-6">
-          {/* Upload Button */}
-          <div className="text-center">
+          {/* File Selection */}
+          <div className="text-center space-y-4">
             <Button
               variant="upload"
               size="lg"
-              onClick={handleUploadClick}
+              onClick={handleFileInputClick}
               className="w-full sm:w-auto"
-              disabled={!originalLanguage || !targetLanguage}
             >
               <Upload className="w-5 h-5" />
-              {t("translate.uploadButton")}
+              {selectedFile ? selectedFile.name : t("translate.uploadButton")}
             </Button>
             <input
               ref={fileInputRef}
               type="file"
               accept=".mp4,video/mp4"
-              onChange={handleFileUpload}
+              onChange={handleFileSelect}
               className="hidden"
             />
+            {selectedFile && (
+              <p className="text-sm text-muted-foreground">
+                File size: {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB
+              </p>
+            )}
           </div>
-
-          {uploading && (
-            <div className="w-full text-center">
-              <p className="text-sm text-muted-foreground mb-2">Uploading... {uploadProgress}%</p>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div
-                  className="bg-blue-500 h-2 rounded-full"
-                  style={{ width: `${uploadProgress}%` }}
-                />
-              </div>
-            </div>
-          )}
-
-          {processing && (
-            <div className="w-full text-center mt-4">
-              <p className="text-sm text-muted-foreground">Processing with AI model...</p>
-              <div className="w-full bg-gray-100 rounded-full h-2 animate-pulse mt-1">
-                <div className="bg-green-400 h-2 rounded-full w-1/2" />
-              </div>
-            </div>
-          )}
 
           {/* Language Selection */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -161,7 +163,7 @@ const VideoUpload = ({ onUploadStart, onUploadProgress }: VideoUploadProps) => {
                 </SelectTrigger>
                 <SelectContent>
                   {languages.map((lang) => (
-                    <SelectItem key={lang.code} value={lang.code}>
+                    <SelectItem key={lang.code} value={lang.value}>
                       <span className="flex items-center gap-2">
                         <span>{lang.flag}</span>
                         <span>{lang.name}</span>
@@ -182,7 +184,7 @@ const VideoUpload = ({ onUploadStart, onUploadProgress }: VideoUploadProps) => {
                 </SelectTrigger>
                 <SelectContent>
                   {languages.map((lang) => (
-                    <SelectItem key={lang.code} value={lang.code}>
+                    <SelectItem key={lang.code} value={lang.value}>
                       <span className="flex items-center gap-2">
                         <span>{lang.flag}</span>
                         <span>{lang.name}</span>
@@ -194,10 +196,38 @@ const VideoUpload = ({ onUploadStart, onUploadProgress }: VideoUploadProps) => {
             </div>
           </div>
 
-          {/* Translate Button (disabled and informational) */}
-          <Button variant="hero" size="lg" className="w-full" disabled>
+          {/* Upload Progress */}
+          {uploading && (
+            <div className="w-full text-center">
+              <p className="text-sm text-muted-foreground mb-2">Uploading... {uploadProgress}%</p>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div
+                  className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${uploadProgress}%` }}
+                />
+              </div>
+            </div>
+          )}
+
+          {processing && (
+            <div className="w-full text-center mt-4">
+              <p className="text-sm text-muted-foreground">Processing with AI model...</p>
+              <div className="w-full bg-gray-100 rounded-full h-2 animate-pulse mt-1">
+                <div className="bg-green-400 h-2 rounded-full w-1/2" />
+              </div>
+            </div>
+          )}
+
+          {/* Translate Button */}
+          <Button 
+            variant="hero" 
+            size="lg" 
+            className="w-full" 
+            onClick={handleUpload}
+            disabled={!selectedFile || !originalLanguage || !targetLanguage || uploading}
+          >
             <Sparkles className="w-5 h-5" />
-            {t("translate.translateButton")} (Coming Soon)
+            {uploading ? "Uploading..." : t("translate.translateButton")}
           </Button>
         </CardContent>
       </Card>
