@@ -6,11 +6,13 @@ import {
   ReactNode,
 } from "react";
 
+// Define the Language type
 type Language = {
   code: string;
   name: string;
   flag: string;
-  };
+  value: string;
+};
 
 // Define the type for translations to improve type safety
 interface Translations {
@@ -41,12 +43,14 @@ interface Translations {
   };
 }
 
+// Define the languages array
 const languages: Language[] = [
-  { code: "en", name: "English", flag: "🇺🇸" },
-  { code: "mn", name: "Монгол", flag: "🇲🇳" },
-  { code: "ja", name: "日本語", flag: "🇯🇵" },
+  { code: "en", name: "English", flag: "🇺🇸", value: "English" },
+  { code: "mn", name: "Монгол", flag: "🇲🇳", value: "Mongolian" },
+  { code: "ja", name: "日本語", flag: "🇯🇵", value: "Japanese" },
 ];
 
+// Define the translations object
 const translations: Record<string, Translations> = {
   en: {
     nav: {
@@ -94,7 +98,8 @@ const translations: Record<string, Translations> = {
       translateButton: "Видео орчуулах",
       uploading: "Оруулж байна...",
       uploadingDescription: "Таны видео оруулж байна. Түр хүлээнэ үү.",
-      uploadingNote: "Видео хэмжээний дагуу хэдэн минут шаардагдах боломжтой.",
+      uploadingNote:
+        "Видео хэмжээний дагуу хэдэн минут шаардлагадах боломжтой.",
       translating: "Орчуулж байна...",
       translatingDescription: "AI таны видео агуулгыг орчуулж байна.",
       completed: "Орчуулга дууссан!",
@@ -141,31 +146,55 @@ interface TranslationContextType {
   languages: Language[];
 }
 
+// Create the context
 const TranslationContext = createContext<TranslationContextType | null>(null);
 
+// Provider component
+interface TranslationProviderProps {
+  children: ReactNode;
+}
 
-export const useTranslation = () => {
-  const [currentLanguage, setCurrentLanguage] = useState<string>('en');
+export const TranslationProvider: React.FC<TranslationProviderProps> = ({
+  children,
+}) => {
+  const [currentLanguage, setCurrentLanguage] = useState<string>("en");
 
   const setLanguage = useCallback((lang: string) => {
     setCurrentLanguage(lang);
   }, []);
 
-  const t = useCallback((key: string) => {
-    const keys = key.split('.');
-    let translation: any = translations[currentLanguage as keyof typeof translations];
-    
-    for (const k of keys) {
-      translation = translation?.[k];
-    }
-    
-    return translation || key;
-  }, [currentLanguage]);
+  const t = useCallback(
+    (key: string) => {
+      const keys = key.split(".");
+      let translation: any =
+        translations[currentLanguage as keyof typeof translations];
 
-  return {
-    t,
-    currentLanguage,
-    setLanguage,
-    languages,
-  };
+      for (const k of keys) {
+        translation = translation?.[k];
+        if (!translation) {
+          return key; // Fallback to key if translation not found
+        }
+      }
+
+      return translation;
+    },
+    [currentLanguage]
+  );
+
+  return (
+    <TranslationContext.Provider
+      value={{ t, currentLanguage, setLanguage, languages }}
+    >
+      {children}
+    </TranslationContext.Provider>
+  );
+};
+
+// Custom hook to use the translation context
+export const useTranslation = () => {
+  const context = useContext(TranslationContext);
+  if (!context) {
+    throw new Error("useTranslation must be used within a TranslationProvider");
+  }
+  return context;
 };

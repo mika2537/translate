@@ -4,6 +4,8 @@ import VideoUpload from '@/components/VideoUpload';
 import VideoProgress from '@/components/VideoProgress';
 import VideoResult from '@/components/VideoResult';
 
+import axios from 'axios';
+
 type AppState = 'upload' | 'uploading' | 'translating' | 'completed';
 
 const VideoTranslator = () => {
@@ -11,34 +13,20 @@ const VideoTranslator = () => {
   const [progress, setProgress] = useState(0);
   const [translatedVideoUrl, setTranslatedVideoUrl] = useState<string>();
 
-  const handleUploadStart = (file: File | string) => {
-    setAppState('uploading');
+  const handleUploadStart = async (file: File | string) => {
+    setAppState('translating');
     setProgress(0);
-    
-    // Simulate upload progress
-    const uploadInterval = setInterval(() => {
-      setProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(uploadInterval);
-          setAppState('translating');
-          startTranslation();
-          return 100;
-        }
-        return prev + Math.random() * 20;
-      });
-    }, 500);
+    await startTranslation();
   };
 
-  const startTranslation = () => {
+  const startTranslation = async () => {
     setProgress(0);
-    
-    // Simulate translation progress
+  
     const translationInterval = setInterval(() => {
       setProgress((prev) => {
         if (prev >= 100) {
           clearInterval(translationInterval);
           setAppState('completed');
-          // In a real app, this would be the actual translated video URL
           setTranslatedVideoUrl('/sample-video.mp4');
           return 100;
         }
@@ -46,7 +34,6 @@ const VideoTranslator = () => {
       });
     }, 800);
   };
-
   const handleNewTranslation = () => {
     setAppState('upload');
     setProgress(0);
@@ -56,15 +43,15 @@ const VideoTranslator = () => {
   const renderContent = () => {
     switch (appState) {
       case 'upload':
-        return <VideoUpload onUploadStart={handleUploadStart} />;
+        return <VideoUpload onUploadStart={handleUploadStart} onUploadProgress={setProgress} />;
       case 'uploading':
         return <VideoProgress stage="uploading" progress={progress} />;
       case 'translating':
         return <VideoProgress stage="translating" progress={progress} />;
       case 'completed':
-        return <VideoResult videoUrl={translatedVideoUrl} onNewTranslation={handleNewTranslation} />;
+        return <VideoResult videoUrl={translatedVideoUrl!} onNewTranslation={handleNewTranslation} />;
       default:
-        return <VideoUpload onUploadStart={handleUploadStart} />;
+        return <VideoUpload onUploadStart={handleUploadStart} onUploadProgress={setProgress} />;
     }
   };
 
